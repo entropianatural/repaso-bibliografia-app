@@ -9,4 +9,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Faltan las variables de entorno de Supabase. Revisa tu archivo .env");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'bibliografia' // <--- ¡Añade esta línea!
+  }
+})
