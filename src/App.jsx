@@ -2,26 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { BIBLIOGRAFIA } from './data/temas';
 
+// --- PALETA CROMÁTICA DE ALTO CONTRASTE REFORZADA ---
 const AMBIENTES = {
-  zen: { 
-    bg: "bg-[#F9F7F2]", text: "text-[#4A5759]", sidebar: "bg-[#F0EDE5]", accent: "bg-[#598392]", 
-    rojo: "bg-red-100", naranja: "bg-orange-100", verde: "bg-[#AEC3B0]", badge: "bg-red-500 text-white",
-    filaSi: "bg-green-50 border-green-200", filaNo: "bg-red-50 border-red-200"
+  vogue: { 
+    bg: "bg-[#FBFBF9]", text: "text-[#1A1C1E]", sidebar: "bg-[#F4F4F1]", accent: "bg-[#1A1C1E]", 
+    rojo: "bg-[#FFF2F2] text-[#8B1A1A] border-[#FAD7D7]", 
+    naranja: "bg-[#FFF9F0] text-[#7A5A01] border-[#FCEAB8]", 
+    verde: "bg-[#F0FAF2] text-[#165C2D] border-[#C6EBD0]",
+    card: "bg-white border-[#EAEAEA]"
   },
-  moderno: { 
-    bg: "bg-slate-50", text: "text-slate-900", sidebar: "bg-slate-200", accent: "bg-blue-600", 
-    rojo: "bg-red-500", naranja: "bg-amber-500", verde: "bg-emerald-500", badge: "bg-blue-600 text-white",
-    filaSi: "bg-emerald-50 border-emerald-200", filaNo: "bg-rose-50 border-rose-200"
-  },
-  noche: { 
-    bg: "bg-[#1A1A1A]", text: "text-[#E0E0E0]", sidebar: "bg-[#121212]", accent: "bg-[#598392]", 
-    rojo: "bg-red-900 text-red-100", naranja: "bg-orange-900 text-orange-100", verde: "bg-emerald-900 text-emerald-100", badge: "bg-white text-black",
-    filaSi: "bg-emerald-900/20 border-emerald-800", filaNo: "bg-rose-900/20 border-rose-800"
+  slate: { 
+    bg: "bg-[#0D1117]", text: "text-[#E6EDF3]", sidebar: "bg-[#161B22]", accent: "bg-[#58A6FF]", 
+    rojo: "bg-[#3D1A1A] text-[#FFD1D1] border-[#662222]", 
+    naranja: "bg-[#3D2D1A] text-[#FFE4C4] border-[#664422]", 
+    verde: "bg-[#1A3D2A] text-[#D1FFD7] border-[#226633]",
+    card: "bg-[#161B22] border-[#30363D]"
   }
 };
 
 function App() {
-  const [ambiente, setAmbiente] = useState('zen');
+  const [ambiente, setAmbiente] = useState('vogue');
   const [temaIdSeleccionado, setTemaIdSeleccionado] = useState(BIBLIOGRAFIA[0]?.id || 0);
   const [respuestasPorTema, setRespuestasPorTema] = useState({});
   const [conteoPreguntas, setConteoPreguntas] = useState({});
@@ -32,22 +32,17 @@ function App() {
   const temaActual = BIBLIOGRAFIA.find(t => t.id === temaIdSeleccionado) || BIBLIOGRAFIA[0];
   const respuestasActuales = respuestasPorTema[temaIdSeleccionado] || {};
 
-  // 1. CARGAR DATOS DESDE SUPABASE AL INICIAR
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
-        
-        // Cargar Progresos (Respuestas Sí/No)
         const { data: prog } = await supabase.from('progresos').select('*').eq('user_id', user.id);
         if (prog) {
           const mapProg = {};
           prog.forEach(p => mapProg[p.tema_id] = p.respuestas);
           setRespuestasPorTema(mapProg);
         }
-
-        // Cargar Conteos (Notificaciones)
         const { data: cont } = await supabase.from('conteos_temas').select('*').eq('user_id', user.id);
         if (cont) {
           const mapCont = {};
@@ -59,149 +54,188 @@ function App() {
     if (sesionIniciada) fetchUserData();
   }, [sesionIniciada]);
 
-  // 2. GUARDAR RESPUESTA (SÍ/NO)
   const handleRespuesta = async (libro, valor) => {
     const nuevasRespuestas = { ...respuestasActuales, [libro]: valor };
     setRespuestasPorTema(prev => ({ ...prev, [temaIdSeleccionado]: nuevasRespuestas }));
-
     if (userId) {
-      await supabase.from('progresos').upsert({
-        user_id: userId,
-        tema_id: temaIdSeleccionado,
-        respuestas: nuevasRespuestas,
-        updated_at: new Date()
-      });
+      await supabase.from('progresos').upsert({ 
+        user_id: userId, tema_id: temaIdSeleccionado, respuestas: nuevasRespuestas 
+      }, { onConflict: 'user_id, tema_id' });
     }
   };
 
-  // 3. CAMBIAR TEMA, GUARDAR CONTEO E HISTORIAL
   const irATemaAleatorio = async () => {
     const nuevoConteo = (conteoPreguntas[temaIdSeleccionado] || 0) + 1;
     setConteoPreguntas(prev => ({ ...prev, [temaIdSeleccionado]: nuevoConteo }));
-
     if (userId) {
-      // Guardar en conteos_temas
-      await supabase.from('conteos_temas').upsert({
-        user_id: userId,
-        tema_id: temaIdSeleccionado,
-        cantidad: nuevoConteo
+      await supabase.from('conteos_temas').upsert({ 
+        user_id: userId, tema_id: temaIdSeleccionado, cantidad: nuevoConteo 
       });
-
-      // Insertar en historial_estudio
-      await supabase.from('historial_estudio').insert({
-        user_id: userId,
-        tema_id: temaIdSeleccionado
-      });
+      await supabase.from('historial_estudio').insert({ user_id: userId, tema_id: temaIdSeleccionado });
     }
-
-    const otrosTemas = BIBLIOGRAFIA.filter(t => t.id !== temaIdSeleccionado);
-    const random = otrosTemas[Math.floor(Math.random() * otrosTemas.length)];
-    setTemaIdSeleccionado(random.id);
-    document.getElementById('main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+    const otros = BIBLIOGRAFIA.filter(t => t.id !== temaIdSeleccionado);
+    setTemaIdSeleccionado(otros[Math.floor(Math.random() * otros.length)].id);
   };
 
-  const getColorEstado = (id) => {
-    const respuestas = respuestasPorTema[id] || {};
-    const valores = Object.values(respuestas);
-    const totalTema = BIBLIOGRAFIA.find(t => t.id === id)?.libros.length || 0;
-    const sis = valores.filter(v => v === 'si').length;
-    
+  const getStatusStyle = (id) => {
+    const r = respuestasPorTema[id] || {};
+    const sis = Object.values(r).filter(v => v === 'si').length;
+    const total = BIBLIOGRAFIA.find(t => t.id === id)?.libros.length || 0;
     if (sis === 0) return estilo.rojo;
-    if (sis === totalTema) return estilo.verde + " text-white";
+    if (sis === total) return estilo.verde;
     return estilo.naranja;
   };
 
+  const totalLibros = temaActual.libros.length;
+  const numColumnas = totalLibros > 12 ? 3 : totalLibros > 6 ? 2 : 1;
+  const filasPorColumna = Math.ceil(totalLibros / numColumnas);
+
   if (!sesionIniciada) {
     return (
-      <div className={`min-h-screen ${estilo.bg} flex items-center justify-center transition-all duration-1000`}>
-        <div className="text-center space-y-8">
-          <h1 className={`text-4xl font-extralight tracking-[0.3em] ${estilo.text}`}>MI BIBLIOGRAFÍA</h1>
-          <button onClick={() => setSesionIniciada(true)} className={`px-16 py-4 border border-current rounded-full ${estilo.text} uppercase tracking-[0.2em] text-xs hover:bg-current hover:text-white transition-all`}>
-            Entrar
-          </button>
-        </div>
+      <div className={`h-screen ${estilo.bg} flex flex-col items-center justify-center font-['Inter']`}>
+        <h1 className={`text-8xl font-['Instrument_Serif'] italic mb-12 ${estilo.text}`}>The Library.</h1>
+        <button onClick={() => setSesionIniciada(true)} className={`px-12 py-5 rounded-full ${ambiente === 'vogue' ? 'bg-[#1A1C1E] text-white' : 'bg-[#E6EDF3] text-black'} font-bold text-[10px] tracking-[0.4em] uppercase transition-all hover:scale-105`}>
+          Entrar
+        </button>
       </div>
     );
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden ${estilo.bg} ${estilo.text} transition-colors duration-500`}>
+    <div className={`flex h-screen w-screen overflow-hidden ${estilo.bg} ${estilo.text} font-['Inter'] transition-colors duration-1000`}>
       
-      {/* SIDEBAR */}
-      <aside className={`w-20 md:w-72 ${estilo.sidebar} flex flex-col h-full border-r border-black/5`}>
-        <div className="p-8 text-center opacity-30 text-[9px] font-black tracking-[0.5em] uppercase">Progreso Real</div>
-        <nav className="flex-1 overflow-y-auto px-3 space-y-2 custom-scrollbar">
-          {BIBLIOGRAFIA.map(t => (
-            <button key={t.id} onClick={() => setTemaIdSeleccionado(t.id)} className={`relative w-full flex items-center p-3 rounded-2xl transition-all ${temaIdSeleccionado === t.id ? 'bg-white shadow-md scale-[1.02]' : 'hover:bg-black/5'}`}>
-              {conteoPreguntas[t.id] > 0 && (
-                <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold z-20 ${estilo.badge}`}>
-                  {conteoPreguntas[t.id]}
+      {/* SIDEBAR REFINADO CON ALTO CONTRASTE */}
+      <aside className={`w-20 md:w-80 ${estilo.sidebar} flex flex-col h-full border-r border-black/[0.06] shrink-0 transition-all`}>
+        <div className="p-10 mb-2">
+          <h2 className="text-xl font-['Instrument_Serif'] italic opacity-40">Index</h2>
+        </div>
+        
+        <nav className="flex-1 overflow-y-auto px-6 space-y-3 custom-scrollbar">
+          {BIBLIOGRAFIA.map(t => {
+            const repasos = conteoPreguntas[t.id] || 0;
+            const activo = temaIdSeleccionado === t.id;
+            const statusStyle = getStatusStyle(t.id);
+
+            return (
+              <button 
+                key={t.id} 
+                onClick={() => setTemaIdSeleccionado(t.id)} 
+                className={`group relative w-full flex items-center p-4 rounded-2xl transition-all duration-300 ${
+                  activo 
+                    ? (ambiente === 'vogue' ? 'bg-white shadow-md ring-1 ring-black/[0.05]' : 'bg-[#21262d] shadow-lg ring-1 ring-white/10') 
+                    : 'hover:bg-black/[0.02] opacity-70 hover:opacity-100'
+                }`}
+              >
+                {/* Badge de Repasos: Contraste invertido para que "salte" a la vista */}
+                {repasos > 0 && (
+                  <div className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center animate-in zoom-in">
+                    <span className={`relative flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black shadow-sm ${
+                      ambiente === 'vogue' ? 'bg-[#1A1C1E] text-white' : 'bg-[#58A6FF] text-[#0D1117]'
+                    }`}>
+                      {repasos}
+                    </span>
+                  </div>
+                )}
+
+                {/* Círculo de Estado: Más sólido para mejor lectura del número */}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 border-2 transition-all ${statusStyle} ${activo ? 'scale-110' : ''}`}>
+                  {t.id}
                 </div>
-              )}
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 shadow-inner ${getColorEstado(t.id)}`}>{t.id}</div>
-              <div className="hidden md:block ml-4 text-left overflow-hidden">
-                <p className={`text-[11px] truncate ${temaIdSeleccionado === t.id ? 'font-bold' : 'opacity-50'}`}>{t.titulo.split(':')[1] || t.titulo}</p>
-              </div>
-            </button>
-          ))}
+
+                {/* Texto del Tema: Contraste máximo si está activo */}
+                <div className="hidden md:block ml-4 text-left overflow-hidden">
+                  <p className={`text-[11px] leading-tight font-bold uppercase tracking-tight transition-colors ${
+                    activo 
+                      ? (ambiente === 'vogue' ? 'text-[#1A1C1E]' : 'text-white') 
+                      : 'text-current opacity-40 group-hover:opacity-60'
+                  }`}>
+                    {t.titulo.split(':')[1] || t.titulo}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </nav>
+
+        <div className="p-10 flex gap-4 border-t border-black/[0.03]">
+          {Object.keys(AMBIENTES).map(k => (
+            <button key={k} onClick={() => setAmbiente(k)} className={`w-5 h-5 rounded-full border-2 border-white shadow-sm transition-all ${ambiente === k ? 'scale-125 ring-2 ring-black/10' : 'opacity-30'} ${AMBIENTES[k].bg}`} />
+          ))}
+        </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main id="main-scroll" className="flex-1 overflow-y-auto relative scroll-smooth">
-        <div className="max-w-4xl mx-auto px-8 py-20 pb-48">
-          <header className="mb-12">
-            <span className="text-[10px] uppercase tracking-[0.3em] opacity-40 mb-2 block">Tema {temaActual.id}</span>
-            <h1 className="text-4xl font-light tracking-tight leading-tight">{temaActual.titulo}</h1>
+      <main className="flex-1 h-screen flex flex-col overflow-hidden relative">
+        <div className="flex-1 w-full flex flex-col px-12 pt-10">
+          
+          <header className="mb-6 shrink-0">
+            <div className="max-w-[320px]">
+              <div className="flex items-center space-x-3 mb-2 opacity-60">
+                  <span className="w-6 h-[1px] bg-current"></span>
+                  <span className="text-[9px] uppercase tracking-[0.4em] font-bold">Ref. {temaActual.id}</span>
+              </div>
+              <h1 className="text-3xl font-['Instrument_Serif'] leading-[1.1] italic tracking-tight">
+                {temaActual.titulo}
+              </h1>
+            </div>
           </header>
 
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 opacity-30 text-[9px] font-bold uppercase tracking-[0.2em] border-b border-black/5">
-              <div className="col-span-8 md:col-span-9">Referencia Bibliográfica</div>
-              <div className="col-span-4 md:col-span-3 text-center">Estado</div>
-            </div>
+          <div className="flex-1 w-full overflow-hidden pb-36 pt-4 px-2">
+            <div 
+              className="h-full grid gap-4 grid-flow-col auto-cols-[minmax(320px,1fr)]"
+              style={{ gridTemplateRows: `repeat(${filasPorColumna}, min-content)` }}
+            >
+              {temaActual.libros.map((l, i) => {
+                const res = respuestasActuales[l];
+                let cardStyle = ambiente === 'vogue' ? 'bg-white border-black/[0.04] shadow-sm' : 'bg-[#161B22] border-[#30363D]';
+                let textStyle = "opacity-85";
 
-            {temaActual.libros.map((l, i) => {
-              const estado = respuestasActuales[l];
-              return (
-                <div key={i} className={`grid grid-cols-12 gap-4 p-5 rounded-2xl border-2 transition-all duration-300 ${
-                  estado === 'si' ? estilo.filaSi : estado === 'no' ? estilo.filaNo : 'bg-white/50 border-transparent shadow-sm'
-                }`}>
-                  <div className="col-span-8 md:col-span-9 flex items-start space-x-4">
-                    <span className="text-[10px] mt-1 opacity-20 font-mono">{i + 1}</span>
-                    <p className={`text-sm md:text-base leading-relaxed ${estado ? 'opacity-100 font-medium' : 'opacity-60'}`}>{l}</p>
+                if (res === 'si') {
+                  cardStyle = estilo.verde;
+                  textStyle = "opacity-100 font-semibold";
+                } else if (res === 'no') {
+                  cardStyle = estilo.rojo;
+                  textStyle = "opacity-100 font-semibold";
+                }
+
+                return (
+                  <div key={i} className={`flex items-stretch p-1 h-fit rounded-[2rem] border transition-all duration-700 animate-in ${cardStyle}`}>
+                    <div className="flex-1 p-5 flex flex-col justify-center">
+                      <p className={`text-[14px] leading-relaxed tracking-tight ${textStyle}`}>
+                        {l}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1 p-1 shrink-0 w-16">
+                      <button 
+                        onClick={() => handleRespuesta(l, 'si')}
+                        className={`flex-1 rounded-[1.3rem] flex items-center justify-center text-[9px] font-bold transition-all ${res === 'si' ? 'bg-[#165C2D] text-[#D1FFD7]' : 'bg-black/[0.03] opacity-20 hover:opacity-100'}`}>
+                        SÍ
+                      </button>
+                      <button 
+                        onClick={() => handleRespuesta(l, 'no')}
+                        className={`flex-1 rounded-[1.3rem] flex items-center justify-center text-[9px] font-bold transition-all ${res === 'no' ? 'bg-[#8B1A1A] text-[#FFD1D1]' : 'bg-black/[0.03] opacity-20 hover:opacity-100'}`}>
+                        NO
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="col-span-4 md:col-span-3 flex justify-center items-center space-x-2">
-                    <button 
-                      onClick={() => handleRespuesta(l, 'no')}
-                      className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${estado === 'no' ? 'bg-red-500 text-white shadow-lg' : 'bg-slate-100/50 opacity-40 hover:opacity-100'}`}
-                    >
-                      No
-                    </button>
-                    <button 
-                      onClick={() => handleRespuesta(l, 'si')}
-                      className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase transition-all ${estado === 'si' ? 'bg-green-500 text-white shadow-lg' : 'bg-slate-100/50 opacity-40 hover:opacity-100'}`}
-                    >
-                      Sí
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          <button onClick={irATemaAleatorio} className={`fixed bottom-10 right-10 flex items-center space-x-4 px-10 py-6 rounded-full shadow-2xl transition-all active:scale-95 ${estilo.accent} text-white`}>
-            <div className="text-right leading-none mr-2">
-              <span className="block text-[8px] uppercase tracking-widest opacity-60 mb-1">Cerrar Sesión</span>
-              <span className="text-sm font-bold uppercase tracking-tighter">Siguiente 🎲</span>
-            </div>
-          </button>
+          <div className="absolute bottom-10 left-0 right-0 pointer-events-none flex items-center justify-center">
+            <button 
+              onClick={irATemaAleatorio} 
+              className={`pointer-events-auto group flex items-center space-x-6 px-12 py-5 rounded-full ${ambiente === 'vogue' ? 'bg-[#1A1C1E] text-white' : 'bg-[#E6EDF3] text-[#0D1117]'} shadow-2xl hover:scale-105 active:scale-95 transition-all duration-500`}>
+               <span className="text-xl">🎲</span>
+               <span className="text-[10px] font-bold uppercase tracking-[0.5em]">Continuar</span>
+            </button>
+          </div>
         </div>
       </main>
 
       <style dangerouslySetInnerHTML={{ __html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        body, html { overflow: hidden; height: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
       `}} />
     </div>
